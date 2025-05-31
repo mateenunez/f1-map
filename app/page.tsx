@@ -1,103 +1,204 @@
-import Image from "next/image";
+"use client";
+import { useEffect, useState } from "react";
+import { getCircuito } from "@/components/circuitos";
+
+interface PositionData {
+  x: number;
+  y: number;
+  driver_number: number;
+}
+
+interface Session {
+  circuit_key: number;
+  circuit_short_name: string;
+  country_name: string;
+  date_start: string;
+  date_end: string;
+  gmt_offset: string;
+  location: string;
+  session_key: number;
+  session_name: string;
+  session_type: string;
+  year: number;
+}
+
+interface Driver {
+  driver_number: number;
+  broadcast_name: string;
+  full_name: string;
+  name_acronym: string;
+  team_name: string;
+  team_colour: string;
+  country_code: string;
+}
+
+interface Track {
+  path: string;
+  viewBox: string;
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [positions, setPositions] = useState<PositionData[]>([]);
+  const [session, setSession] = useState<Session | null>(null);
+  const [trackData, setTrackData] = useState<Track>();
+  const [lastUpdate, setLastUpdate] = useState<Date>();
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [isEmpty, setIsEmpty] = useState(true);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+  function createLinearizer(pathElement: any, numSamples = 100) {
+    const totalLength = pathElement.getTotalLength();
+    const samples = new Array();
+
+    for (let i = 0; i < numSamples; i++) {
+      const u = i / (numSamples - 1);
+      const length = u * totalLength;
+      const point = pathElement.getPointAtLength(length);
+      samples.push({ u, x: point.x, y: point.y });
+    }
+
+    // Función que convierte (x, y) en u
+    return (x: number, y: number) => {
+      let minDistSq = Infinity;
+      let bestU = 0;
+
+      for (const sample of samples) {
+        const dx = sample.x - x;
+        const dy = sample.y - y;
+        const distSq = dx * dx + dy * dy;
+
+        if (distSq < minDistSq) {
+          minDistSq = distSq;
+          bestU = sample.u;
+        }
+      }
+
+      return bestU;
+    };
+  }
+
+  async function fetchSession() {
+    const sessionResponse = await fetch(
+      "https://api.openf1.org/v1/sessions?session_key=latest"
+    );
+    if (!sessionResponse.ok) {
+      throw new Error(`Session API error: ${sessionResponse.status}`);
+    }
+    const sessions = await sessionResponse.json();
+    const latestSession = sessions[sessions.length - 1];
+    console.log(latestSession);
+    if (latestSession) {
+      setSession(latestSession);
+    }
+  }
+
+ async function fetchDrivers() {
+    if (session) {
+      var newDrivers = await fetch(
+        `https://api.openf1.org/v1/drivers?session_key=${session.session_key}`
+      );
+      var driversData = await newDrivers.json();
+      if (driversData && Array.isArray(driversData)) {
+        setDrivers(driversData);
+      } else setDrivers([]);
+    }
+  }
+
+  async function fetchCords() {
+    if (session) {
+      const url = `https://api.openf1.org/v1/location?session_key=${session?.session_key}&date>${new Date(new Date().getTime() - 5 * 1000).toISOString()}&date<${new Date().toISOString()}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.length>0){
+        setIsEmpty(false)
+      }
+      const uniquePositions = [];
+      const seen = new Set<number>();
+      for (let i = data.slice(-100).length - 1; i >= 0; i--) {
+      var car = data[i];
+      if (!seen.has(car.driver_number)) {
+        uniquePositions.push(car);
+        seen.add(car.driver_number);
+      }
+    }
+      setPositions(uniquePositions.reverse());
+      console.log(uniquePositions.reverse(), data)
+    }
+  }
+
+  useEffect(() => {
+    fetchSession();
+  }, []);
+
+  useEffect(()=>{
+    if (session){
+      fetchDrivers()
+    }
+  }, [session])
+
+  useEffect(() => {
+    if (session && drivers) {
+      const track = getCircuito(session.circuit_short_name);
+      if (track) {
+        setTrackData(track);
+        const generalFetch = async () => {
+          await fetchCords();
+          setLastUpdate(new Date());
+        };
+        generalFetch();
+          const interval = setInterval(generalFetch, 20 * 1000); // Cada 20 segundos.
+          return () => clearInterval(interval);
+      }
+    }
+  }, [session, drivers]);
+
+
+  return (
+<div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <div className="w-full max-w-5xl px-2">
+      {isEmpty ? <h1> No se está corriendo una carrera. </h1> : <></>}
+      {trackData ? (
+        <svg viewBox={trackData.viewBox} className="w-full h-auto border-none p-3">
+          {/* Pista principal */}
+          <path d={trackData.path} stroke="black" fill="none" strokeWidth="3" />
+
+          {
+          
+          
+          positions.map((car) => {
+
+            const pathElement = document.querySelector("path");
+            let p = { x: 0, y: 0 };
+
+            if (pathElement) {
+              const linearize = createLinearizer(pathElement);
+              const totalLength = pathElement.getTotalLength();
+
+              const u = linearize(car.x, car.y);
+              const point = pathElement.getPointAtLength(u * totalLength);
+
+              p = point;
+            }
+
+            const driver = drivers.find(d => d.driver_number === car.driver_number)
+
+            return (
+              <g
+                key={car.driver_number+car.x}
+                transform={`translate(${p.x},${p.y})`}
+                className="transition-all duration-200"
+              >
+                <circle r="3" fill={`#${driver?.team_colour}`} />
+                <text y="" textAnchor="start" fontSize="10" fill={`#${driver?.team_colour}`} className="text-md font-bold">
+                  {driver?.name_acronym}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      ) : (
+        <h1> Cargando circuito...</h1>
+      )}
     </div>
+</div>
   );
 }
