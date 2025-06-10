@@ -1,11 +1,126 @@
-  const getCircuito = (circuitName: string) => {
-    const tracks = {
-      Catalunya: {
-        viewBox: "0 0 600 200",
-        path: "m560.41 40.295c-20.018-8.5906-41.406-13.904-62.007-21.09-18.126-7.8881-40.735 12.076-33.534 30.966 2.3505 16.442 20.999 18.385 33.065 24.738 6.1492 13.672 10.935 28.162 16.195 42.261 2.3859 4.9366-3.0391 12.455-8.3552 8.9062-59.54-35.146-118.45-71.357-178-106.48-16.838-9.0143-39.62-6.536-51.298 9.7052-16.243 22.891-32.566 45.843-47.369 69.696-8.074 11.823 3.1024 33.213-12.794 40.237-29.51 0.46204-61.831 4.254-87.982-12.578-17.01-11.455-34.26-22.594-50.927-34.537-8.9476-6.0287-2.2628-22.763 8.5379-21.555 26.166-0.84475 52.38 0.0272 78.561-0.3787 18.353-1.9193 38.009-13.378 40.726-33.185 5.4824-18.519-13.353-35.71-31.601-31.873-47.18 2.6975-98.162-9.3126-141.36 15.38l-1.5768 0.98827c-20.369 14.774-33.822 43.209-21.733 67.261l5.3421 8.5236c14.465 18.598 40.396 18.998 58.279 32.597 8.6385 8.0399 6.2489 20.348 7.1311 30.794 2.6542 8.4152 10.169 16.865 19.706 16.528 144.76-0.88 289.52-0.15 434.28 0.88 6.1801 0.25726 12.315-0.59035 18.352-1.8243l13.245-8.3012c16.149-16.187 12.808-40.046 12.495-60.845-1.1932-9.8501-17.247-3.6011-18.1-13.286-0.20453-16.878 5.1156-33.642 2.5896-50.552l-1.8637-2.9736z",
-      },
-    };
-    return tracks[circuitName as keyof typeof tracks];
-  };
+import { Track } from "./interfaces";
+import { getCircuitoPrecargado } from "./circuitosPrecargados";
 
-export {getCircuito}
+function getBounds(points: { x: number; y: number }[]) {
+  return {
+    minX: Math.min(...points.map((p) => p.x)),
+    maxX: Math.max(...points.map((p) => p.x)),
+    minY: Math.min(...points.map((p) => p.y)),
+    maxY: Math.max(...points.map((p) => p.y)),
+  };
+}
+
+export function normalizePoint(
+  point: { x: number; y: number },
+  bounds: { minX: number; maxX: number; minY: number; maxY: number },
+  width = 800,
+  height = 600,
+  padding = 50
+) {
+  return {
+    normalizedX:
+      ((point.x - bounds.minX) / (bounds.maxX - bounds.minX)) *
+        (width - 2 * padding) +
+      padding,
+    normalizedY:
+      ((point.y - bounds.minY) / (bounds.maxY - bounds.minY)) *
+        (height - 2 * padding) +
+      padding,
+  };
+}
+
+function generateTrackPath(
+  normalizedPoints: { normalizedX: number; normalizedY: number }[]
+) {
+  if (normalizedPoints.length === 0) return "";
+  let path = `M ${normalizedPoints[0].normalizedX} ${normalizedPoints[0].normalizedY}`;
+  for (let i = 1; i < normalizedPoints.length; i++) {
+    const p = normalizedPoints[i];
+    path += ` L ${p.normalizedX} ${p.normalizedY}`;
+  }
+  return path;
+}
+
+const getSesionVieja = async (circuitName: string) => {
+  const res = await fetch(
+    `https://api.openf1.org/v1/sessions?circuit_short_name=${circuitName}&year=2024`
+  );
+  const data = await res.json();
+  if (data.length > 0) {
+    return data[data.length - 1];
+  }
+  return null;
+};
+
+function filtrarLocalizacionesUnicas(data: any[]) {
+  const seen = new Set<string>();
+  return data.filter((loc) => {
+    const key = `${loc.x},${loc.y},${loc.z}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function getLocalizacionesCorredor(old_session_key: string) {
+  const res = await fetch(
+    `https://api.openf1.org/v1/location?session_key=${old_session_key}&driver_number=1`
+  );
+  const data = await res.json();
+  const localizacionesUnicas = filtrarLocalizacionesUnicas(data);
+  return localizacionesUnicas;
+}
+
+const createCircuito = async (circuitName: string) => {
+  // Obtener sesión vieja
+  const sesionVieja = await getSesionVieja(circuitName);
+  const old_session_key = sesionVieja ? sesionVieja.session_key : null;
+  // Obtener localizaciones de un corredor
+  const localizacionesUnicas = await getLocalizacionesCorredor(old_session_key);
+  const width = 1000;
+  const height = 2400;
+  const padding = 0;
+  const zoomFactor = 0.5;
+
+  const bounds = getBounds(localizacionesUnicas);
+  const normalizedTrack = localizacionesUnicas.map((loc) =>
+    normalizePoint(loc, bounds, width, height, padding)
+  );
+  const trackPath = generateTrackPath(normalizedTrack);
+
+  const viewBox = `${bounds.minX * 0.5} ${bounds.minY * 0.05} ${
+    (bounds.maxX - bounds.minX) * zoomFactor
+  } ${(bounds.maxY - bounds.minY) * zoomFactor}`;
+
+  const tracks = {
+    [circuitName]: {
+      viewBox: viewBox,
+      path: trackPath,
+      bounds: bounds,
+      width: width,
+      height: height,
+      localizacionesUnicas: localizacionesUnicas
+    },
+  };
+  return {
+    track: tracks[circuitName],
+  };
+};
+
+const getCircuito = async (
+  circuitName: string
+): Promise<{ track: Track}> => {
+  var circuito = getCircuitoPrecargado(circuitName);
+
+  if (!circuito) {
+    const { track } = await createCircuito(circuitName);
+    console.log(track)
+    return { track };
+  }
+
+  return {
+    track: circuito as Track,
+  };
+};
+
+export { getCircuito };

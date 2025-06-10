@@ -1,79 +1,71 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { getCircuito } from "@/components/circuitos";
-
-interface PositionData {
-  x: number;
-  y: number;
-  driver_number: number;
-}
-
-interface Session {
-  circuit_key: number;
-  circuit_short_name: string;
-  country_name: string;
-  date_start: string;
-  date_end: string;
-  gmt_offset: string;
-  location: string;
-  session_key: number;
-  session_name: string;
-  session_type: string;
-  year: number;
-}
-
-interface Driver {
-  driver_number: number;
-  broadcast_name: string;
-  full_name: string;
-  name_acronym: string;
-  team_name: string;
-  team_colour: string;
-  country_code: string;
-}
-
-interface Track {
-  path: string;
-  viewBox: string;
-}
+import {
+  Driver,
+  DriverPosition,
+  Location,
+  NormalizedDrivers,
+  PositionData,
+  Session,
+  Track,
+} from "../components/interfaces";
+import { getLocalizaciones } from "@/components/localizaciones";
+import { Motion, spring } from "react-motion";
 
 export default function Home() {
-  const [positions, setPositions] = useState<PositionData[]>([]);
+  const [locations, setLocations] = useState<PositionData[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [trackData, setTrackData] = useState<Track>();
-  const [lastUpdate, setLastUpdate] = useState<Date>();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [isEmpty, setIsEmpty] = useState(true);
+  const [normalizedDrivers, setNormalizedDrivers] = useState<
+    NormalizedDrivers[]
+  >([]);
+  const [localizacionesUnicas, setLocalizacionesUnicas] = useState<Location[]>(
+    []
+  );
+  const [auxLocations, setAuxLocations] = useState<PositionData[][]>();
 
-  function createLinearizer(pathElement: any, numSamples = 100) {
-    const totalLength = pathElement.getTotalLength();
-    const samples = new Array();
+  const mockIndexRef = useRef(0);
+  const auxIndexRef = useRef(0);
 
-    for (let i = 0; i < numSamples; i++) {
-      const u = i / (numSamples - 1);
-      const length = u * totalLength;
-      const point = pathElement.getPointAtLength(length);
-      samples.push({ u, x: point.x, y: point.y });
+  function createAuxLocations(
+    n: number,
+    currentLocation: PositionData,
+    nextLocation: PositionData,
+    localizacionesUnicas: { x: number; y: number }[]
+  ) {
+    const currentIdx = localizacionesUnicas.findIndex(
+      (p) => p.x === currentLocation.x && p.y === currentLocation.y
+    );
+    const nextIdx = localizacionesUnicas.findIndex(
+      (p) => p.x === nextLocation.x && p.y === nextLocation.y
+    );
+
+    if (currentIdx === -1 || nextIdx === -1) return [];
+
+    let pathPoints;
+    if (currentIdx <= nextIdx) {
+      pathPoints = localizacionesUnicas.slice(currentIdx, nextIdx + 1);
+    } else {
+      pathPoints = [
+        ...localizacionesUnicas.slice(currentIdx),
+        ...localizacionesUnicas.slice(0, nextIdx + 1),
+      ];
     }
 
-    // Función que convierte (x, y) en u
-    return (x: number, y: number) => {
-      let minDistSq = Infinity;
-      let bestU = 0;
-
-      for (const sample of samples) {
-        const dx = sample.x - x;
-        const dy = sample.y - y;
-        const distSq = dx * dx + dy * dy;
-
-        if (distSq < minDistSq) {
-          minDistSq = distSq;
-          bestU = sample.u;
-        }
-      }
-
-      return bestU;
-    };
+    const auxLocations: PositionData[] = [];
+    for (let i = 0; i < n; i++) {
+      const idx = Math.floor((i / (n - 1)) * (pathPoints.length - 1));
+      const point = pathPoints[idx];
+      auxLocations.push({
+        x: point.x,
+        y: point.y,
+        driver_number: currentLocation.driver_number,
+      });
+    }
+    return auxLocations;
   }
 
   async function fetchSession() {
@@ -85,120 +77,306 @@ export default function Home() {
     }
     const sessions = await sessionResponse.json();
     const latestSession = sessions[sessions.length - 1];
-    console.log(latestSession);
     if (latestSession) {
       setSession(latestSession);
     }
   }
 
- async function fetchDrivers() {
+  async function fetchDrivers() {
     if (session) {
       var newDrivers = await fetch(
-        `https://api.openf1.org/v1/drivers?session_key=${session.session_key}`
+        `https://api.openf1.org/v1/drivers?session_key=latest`
       );
       var driversData = await newDrivers.json();
       if (driversData && Array.isArray(driversData)) {
-        setDrivers(driversData);
+        setDrivers(driversData.filter((driver) => driver.team_colour != null));
       } else setDrivers([]);
     }
   }
 
-  async function fetchCords() {
+  async function fetchCords(n: number = 20) {
     if (session) {
-      const url = `https://api.openf1.org/v1/location?session_key=${session?.session_key}&date>${new Date(new Date().getTime() - 5 * 1000).toISOString()}&date<${new Date().toISOString()}`;
+      const url = `https://api.openf1.org/v1/location?session_key=latest&date>=${new Date(
+        new Date().getTime() - 1 * 60 * 1000
+      ).toISOString()}`;
       const res = await fetch(url);
-      const data = await res.json();
-      if (data.length>0){
-        setIsEmpty(false)
+      var data = await res.json();
+
+      if (data.length > 0) {
+        const uniquePositions = new Array();
+        const seen = new Set<number>();
+
+        for (let i = data.slice(-50).length - 1; i >= 0; i--) {
+          var car = data[i];
+          if (!seen.has(car.driver_number)) {
+            uniquePositions.push(car);
+            seen.add(car.driver_number);
+          }
+        }
+
+        const auxLocationList: PositionData[][] = drivers.map((driver) => {
+          const nextLocation = uniquePositions.find(
+            (l) => l.driver_number === driver.driver_number
+          );
+          const currentLocation = locations.findLast(
+            (l) => l.driver_number === driver.driver_number
+          );
+          if (currentLocation && nextLocation) {
+            return createAuxLocations(
+              n,
+              currentLocation,
+              nextLocation,
+              localizacionesUnicas
+            );
+          }
+          return [];
+        });
+
+        setAuxLocations(auxLocationList);
+
+        setLocations(uniquePositions.reverse());
       }
-      const uniquePositions = [];
-      const seen = new Set<number>();
-      for (let i = data.slice(-100).length - 1; i >= 0; i--) {
-      var car = data[i];
-      if (!seen.has(car.driver_number)) {
-        uniquePositions.push(car);
-        seen.add(car.driver_number);
-      }
-    }
-      setPositions(uniquePositions.reverse());
-      console.log(uniquePositions.reverse(), data)
     }
   }
 
+  function fetchMockCords() {
+    if (localizacionesUnicas && localizacionesUnicas.length > 0) {
+      if (localizacionesUnicas.length > 0) {
+        setIsEmpty(false);
+
+        mockIndexRef.current =
+          (mockIndexRef.current + 50) % localizacionesUnicas.length;
+
+        const mockData: PositionData[] = new Array();
+
+        // Uso a Verstappen como sujeto de prueba
+
+        mockData.push({
+          driver_number: 1,
+          x: localizacionesUnicas[mockIndexRef.current - 50].x,
+          y: localizacionesUnicas[mockIndexRef.current - 50].y,
+        });
+
+        // Una vez tenemos los datos para cada corredor, generamos la lista de PositionData auxiliares para cada uno
+
+        const auxLocationList: PositionData[][] = drivers.map((driver) => {
+          if (driver.driver_number === 1) {
+            const nextPoint = localizacionesUnicas[mockIndexRef.current];
+            const nextLocation: PositionData = {
+              driver_number: driver.driver_number,
+              x: nextPoint.x,
+              y: nextPoint.y,
+            };
+            const currentLocation = mockData.findLast(
+              (l) => l.driver_number === driver.driver_number
+            );
+            if (currentLocation && nextLocation) {
+              return createAuxLocations(
+                20,
+                currentLocation,
+                nextLocation,
+                localizacionesUnicas
+              );
+            }
+          }
+          return [];
+        });
+
+        setAuxLocations(auxLocationList);
+      }
+    }
+  }
+
+  async function fetchStartCords() {
+    var data: PositionData[] = new Array();
+
+    for (let index = 0; index < drivers.length; index++) {
+      const d = drivers[index];
+      const start = localizacionesUnicas[0] || { x: 0, y: 0 };
+      data.push({ x: start.x, y: start.y, driver_number: d.driver_number });
+    }
+
+    if (data.length > 0) {
+      setIsEmpty(false);
+      const uniquePositions: PositionData[] = new Array();
+      const seen = new Set<number>();
+
+      for (let i = data.slice(-100).length - 1; i >= 0; i--) {
+        var car = data[i];
+        if (!seen.has(car.driver_number)) {
+          uniquePositions.push(car);
+          seen.add(car.driver_number);
+        }
+      }
+      setLocations(uniquePositions.reverse());
+    }
+  }
+
+  // Fetch de session
   useEffect(() => {
     fetchSession();
   }, []);
 
-  useEffect(()=>{
-    if (session){
-      fetchDrivers()
+  // Fetch de drivers
+  useEffect(() => {
+    if (session) {
+      fetchDrivers();
     }
-  }, [session])
+  }, [session]);
 
+  // Obtención de localizaciones normalizadas
+  useEffect(() => {
+    if (locations && drivers && trackData) {
+      const normalizedDrivers = getLocalizaciones({
+        locations,
+        drivers,
+        trackData,
+      });
+      setNormalizedDrivers(normalizedDrivers);
+    }
+  }, [locations]);
+
+  // Fetch de coordenadas iniciales
+  useEffect(() => {
+    if (drivers && session && localizacionesUnicas.length > 0) {
+      fetchStartCords();
+    }
+  }, [drivers, localizacionesUnicas]);
+
+  // Fetch protocolar de localizaciones
+  useEffect(() => {
+    if (session && drivers && trackData) {
+      const generalFetch = async () => {
+        await fetchCords();
+        //fetchMockCords(); // Eliminar en producción
+      };
+      generalFetch();
+      const interval = setInterval(generalFetch, 10 * 1000);
+      return () => clearInterval(interval);
+    }
+  }, [session, drivers, trackData]);
+
+  // Cargar circuito y localizaciones únicas
   useEffect(() => {
     if (session && drivers) {
-      const track = getCircuito(session.circuit_short_name);
-      if (track) {
-        setTrackData(track);
-        const generalFetch = async () => {
-          await fetchCords();
-          setLastUpdate(new Date());
-        };
-        generalFetch();
-          const interval = setInterval(generalFetch, 20 * 1000); // Cada 20 segundos.
-          return () => clearInterval(interval);
-      }
+      const getCircuitoAsync = async () => {
+        const { track } = await getCircuito(
+          session.circuit_short_name
+        );
+        if (track) {
+          setTrackData(track);
+          setLocalizacionesUnicas(track.localizacionesUnicas); // <-- aquí guardas las localizaciones únicas
+        }
+      };
+      getCircuitoAsync();
     }
   }, [session, drivers]);
 
+  // Animación de posiciones auxiliares	
+  useEffect(() => {
+    if (trackData && drivers && auxLocations) {
+      auxIndexRef.current = 0; // Reinicia el índice cuando cambian las auxLocations
+
+      const interval = setInterval(() => {
+        // Avanza el índice, pero no más allá del último punto auxiliar
+        if (
+          auxLocations.length > 0 &&
+          auxIndexRef.current < auxLocations[0].length - 1
+        ) {
+          auxIndexRef.current = auxIndexRef.current + 1;
+        }
+
+        const nextAuxLocations = new Array<PositionData>();
+
+        for (let i = 0; i < auxLocations.length; i++) {
+          const iDriver = auxLocations[i];
+          const nextLocation = iDriver[auxIndexRef.current];
+          nextAuxLocations.push(nextLocation);
+        }
+
+        // Filtra solo los valores definidos (por ahora solo Verstappen)
+        const filteredAuxLocations = nextAuxLocations.filter(Boolean);
+
+        // Normaliza las posiciones auxiliares actuales
+        const normalizedDrivers = getLocalizaciones({
+          locations: filteredAuxLocations,
+          drivers,
+          trackData,
+        });
+
+        setNormalizedDrivers(normalizedDrivers);
+      }, 0.5 * 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [auxLocations]);
 
   return (
-<div className="flex items-center justify-center min-h-screen bg-gray-100">
+    <div className="flex items-center justify-center min-h-screen bg-gray-800">
       <div className="w-full max-w-5xl px-2">
-      {isEmpty ? <h1> No se está corriendo una carrera. </h1> : <></>}
-      {trackData ? (
-        <svg viewBox={trackData.viewBox} className="w-full h-auto border-none p-3">
-          {/* Pista principal */}
-          <path d={trackData.path} stroke="black" fill="none" strokeWidth="3" />
+        {trackData ? (
+          <svg
+            viewBox={trackData.viewBox}
+            className="w-full h-auto border-none p-3"
+          >
+            {/* Pista principal */}
+            <path
+              d={trackData.path}
+              stroke="white"
+              opacity={0.35}
+              fill="none"
+              strokeWidth="75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
 
-          {
-          
-          
-          positions.map((car) => {
-
-            const pathElement = document.querySelector("path");
-            let p = { x: 0, y: 0 };
-
-            if (pathElement) {
-              const linearize = createLinearizer(pathElement);
-              const totalLength = pathElement.getTotalLength();
-
-              const u = linearize(car.x, car.y);
-              const point = pathElement.getPointAtLength(u * totalLength);
-
-              p = point;
-            }
-
-            const driver = drivers.find(d => d.driver_number === car.driver_number)
-
-            return (
-              <g
-                key={car.driver_number+car.x}
-                transform={`translate(${p.x},${p.y})`}
-                className="transition-all duration-200"
+            {/* Renderizar corredores usando las posiciones animadas */}
+            {normalizedDrivers.map((item) => (
+              <Motion
+                key={item.driver?.driver_number || 0 + auxIndexRef.current}
+                defaultStyle={{
+                  x: item.normalizedX,
+                  y: item.normalizedY,
+                }}
+                style={{
+                  x: spring(item.normalizedX, { stiffness: 30, damping: 10 }),
+                  y: spring(item.normalizedY, { stiffness: 30, damping: 10 }),
+                }}
               >
-                <circle r="3" fill={`#${driver?.team_colour}`} />
-                <text y="" textAnchor="start" fontSize="10" fill={`#${driver?.team_colour}`} className="text-md font-bold">
-                  {driver?.name_acronym}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-      ) : (
-        <h1> Cargando circuito...</h1>
-      )}
+                {({ x, y }) => (
+                  <g className="transition-all duration-300 eas-in-out">
+                    {/* Glow effect */}
+                    <circle cx={x} cy={y} r="20" fill="url(#carGlow)" />
+                    {/* Coche */}
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r="20"
+                      fill={`#${item.driver?.team_colour || "3B82F6"}`}
+                      stroke="#FFFFFF"
+                      strokeWidth="2"
+                      className="drop-shadow-lg"
+                    />
+                    {/* Nombre o acrónimo */}
+                    <text
+                      x={x}
+                      y={y - 12}
+                      textAnchor="middle"
+                      fontSize="30"
+                      fill="#fff"
+                      style={{ pointerEvents: "none" }}
+                    >
+                      {item.driver?.name_acronym}
+                    </text>
+                  </g>
+                )}
+              </Motion>
+            ))}
+          </svg>
+        ) : (
+          <h1> Cargando circuito...</h1>
+        )}
+      </div>
     </div>
-</div>
   );
 }
