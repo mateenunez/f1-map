@@ -12,6 +12,12 @@ import {
 } from "../components/interfaces";
 import { getLocalizaciones } from "@/components/localizaciones";
 import { Motion, spring } from "react-motion";
+import { Anta } from "next/font/google";
+
+const regularAnta = Anta({
+  subsets: ["latin"],
+  weight: ["400"],
+});
 
 export default function Home() {
   const [locations, setLocations] = useState<PositionData[]>([]);
@@ -97,7 +103,7 @@ export default function Home() {
   async function fetchCords(n: number = 20) {
     if (session) {
       const url = `https://api.openf1.org/v1/location?session_key=latest&date>=${new Date(
-        new Date().getTime() - 1 * 60 * 1000
+        new Date().getTime() - 10 * 1000
       ).toISOString()}`;
       const res = await fetch(url);
       var data = await res.json();
@@ -149,8 +155,16 @@ export default function Home() {
 
         const mockData: PositionData[] = new Array();
 
-        // Uso a Verstappen como sujeto de prueba
+        // Todos los corredores 
+        // for (let index = 0; index < drivers.length; index++) {
+        //   mockData.push({
+        //   driver_number: drivers[index].driver_number,
+        //   x: localizacionesUnicas[mockIndexRef.current - 30 + index].x,
+        //   y: localizacionesUnicas[mockIndexRef.current - 30 + index].y,
+        // });
+        // }
 
+        // Uso a Verstappen como sujeto de prueba
         mockData.push({
           driver_number: 1,
           x: localizacionesUnicas[mockIndexRef.current - 50].x,
@@ -160,25 +174,24 @@ export default function Home() {
         // Una vez tenemos los datos para cada corredor, generamos la lista de PositionData auxiliares para cada uno
 
         const auxLocationList: PositionData[][] = drivers.map((driver) => {
-          if (driver.driver_number === 1) {
-            const nextPoint = localizacionesUnicas[mockIndexRef.current];
-            const nextLocation: PositionData = {
-              driver_number: driver.driver_number,
-              x: nextPoint.x,
-              y: nextPoint.y,
-            };
-            const currentLocation = mockData.findLast(
-              (l) => l.driver_number === driver.driver_number
+          const nextPoint = localizacionesUnicas[mockIndexRef.current];
+          const nextLocation: PositionData = {
+            driver_number: driver.driver_number,
+            x: nextPoint.x,
+            y: nextPoint.y,
+          };
+          const currentLocation = mockData.findLast(
+            (l) => l.driver_number === driver.driver_number
+          );
+          if (currentLocation && nextLocation) {
+            return createAuxLocations(
+              20,
+              currentLocation,
+              nextLocation,
+              localizacionesUnicas
             );
-            if (currentLocation && nextLocation) {
-              return createAuxLocations(
-                20,
-                currentLocation,
-                nextLocation,
-                localizacionesUnicas
-              );
-            }
           }
+
           return [];
         });
 
@@ -260,9 +273,7 @@ export default function Home() {
   useEffect(() => {
     if (session && drivers) {
       const getCircuitoAsync = async () => {
-        const { track } = await getCircuito(
-          session.circuit_short_name
-        );
+        const { track } = await getCircuito(session.circuit_short_name);
         if (track) {
           setTrackData(track);
           setLocalizacionesUnicas(track.localizacionesUnicas); // <-- aquí guardas las localizaciones únicas
@@ -272,7 +283,7 @@ export default function Home() {
     }
   }, [session, drivers]);
 
-  // Animación de posiciones auxiliares	
+  // Animación de posiciones auxiliares
   useEffect(() => {
     if (trackData && drivers && auxLocations) {
       auxIndexRef.current = 0; // Reinicia el índice cuando cambian las auxLocations
@@ -313,7 +324,7 @@ export default function Home() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-800">
-      <div className="w-full max-w-5xl px-2">
+      <div className="w-full max-h-full px-2">
         {trackData ? (
           <svg
             viewBox={trackData.viewBox}
@@ -326,7 +337,7 @@ export default function Home() {
               stroke="white"
               opacity={0.35}
               fill="none"
-              strokeWidth="75"
+              strokeWidth="30"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
@@ -345,7 +356,7 @@ export default function Home() {
                 }}
               >
                 {({ x, y }) => (
-                  <g className="transition-all duration-300 eas-in-out">
+                  <g className="transition-all duration-300 eas-in-out" >
                     {/* Glow effect */}
                     <circle cx={x} cy={y} r="20" fill="url(#carGlow)" />
                     {/* Coche */}
@@ -361,7 +372,7 @@ export default function Home() {
                     {/* Nombre o acrónimo */}
                     <text
                       x={x}
-                      y={y - 12}
+                      y={y - 15}
                       textAnchor="middle"
                       fontSize="30"
                       fill="#fff"
@@ -375,12 +386,18 @@ export default function Home() {
             ))}
           </svg>
         ) : (
-          <h1 className="text-center text-gray-200 mb-4" >Mapa de Fórmula 1</h1>
+          <h1
+            className="text-center text-gray-200 mb-4"
+            style={regularAnta.style}
+          >
+            Mapa de Fórmula 1
+          </h1>
         )}
       </div>
       <h1 className="sr-only">Mapa de Fórmula 1 en Tiempo Real</h1>
       <p className="text-center text-gray-200 mb-4 sr-only">
-      Mapa gratuito y en tiempo real de Fórmula 1. Puedes incrustarlo en tu web con un simple iframe.
+        Mapa gratuito y en tiempo real de Fórmula 1. Puedes incrustarlo en tu
+        web con un simple iframe.
       </p>
     </div>
   );

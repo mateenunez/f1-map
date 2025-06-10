@@ -1,4 +1,4 @@
-"use client"
+"use client";
 import { useMemo } from "react";
 import { normalizePoint } from "@/components/circuitos";
 import { Localizacion, NormalizedDrivers } from "./interfaces";
@@ -15,7 +15,9 @@ export function getLocalizaciones({
       location,
       trackData.bounds,
       trackData.width,
-      trackData.height
+      trackData.height,
+      trackData.rotationAngle,
+      trackData.mirrorY
     );
     return {
       ...normalizedLocation,

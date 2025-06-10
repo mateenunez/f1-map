@@ -6,7 +6,7 @@ interface PositionData {
 
 interface Location {
   x: number;
-  y:number;
+  y: number;
 }
 
 interface Session {
@@ -45,6 +45,8 @@ interface Track {
   width: number;
   height: number;
   localizacionesUnicas: PositionData[];
+  rotationAngle: number;
+  mirrorY: boolean;
 }
 
 interface DriverPosition {
@@ -56,15 +58,24 @@ interface DriverPosition {
 }
 
 interface Localizacion {
-  locations: PositionData[]
-  drivers: Driver[]
-  trackData : Track
+  locations: PositionData[];
+  drivers: Driver[];
+  trackData: Track;
 }
 
-interface NormalizedDrivers{
-    driver: Driver | undefined;
-    normalizedX: number;
-    normalizedY: number;
+interface NormalizedDrivers {
+  driver: Driver | undefined;
+  normalizedX: number;
+  normalizedY: number;
 }
 
-export type {PositionData, Session, Driver, Track, DriverPosition, Localizacion, NormalizedDrivers, Location};
+export type {
+  PositionData,
+  Session,
+  Driver,
+  Track,
+  DriverPosition,
+  Localizacion,
+  NormalizedDrivers,
+  Location,
+};

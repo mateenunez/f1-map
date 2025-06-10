@@ -10,23 +10,50 @@ function getBounds(points: { x: number; y: number }[]) {
   };
 }
 
+function rotatePoint(
+  point: { x: number; y: number },
+  center: { x: number; y: number },
+  angleDegrees: number
+) {
+  const angle = (angleDegrees * Math.PI) / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const dx = point.x - center.x;
+  const dy = point.y - center.y;
+  return {
+    x: center.x + dx * cos - dy * sin,
+    y: center.y + dx * sin + dy * cos,
+  };
+}
+
 export function normalizePoint(
   point: { x: number; y: number },
   bounds: { minX: number; maxX: number; minY: number; maxY: number },
   width = 800,
   height = 600,
-  padding = 50
+  rotationAngle = 0,
+  mirrorY = true
 ) {
-  return {
-    normalizedX:
-      ((point.x - bounds.minX) / (bounds.maxX - bounds.minX)) *
-        (width - 2 * padding) +
-      padding,
-    normalizedY:
-      ((point.y - bounds.minY) / (bounds.maxY - bounds.minY)) *
-        (height - 2 * padding) +
-      padding,
+  // Centro del circuito para rotar
+  const center = {
+    x: (bounds.minX + bounds.maxX) / 2,
+    y: (bounds.minY + bounds.maxY) / 2,
   };
+  // Aplica rotación si es necesario
+  const rotated =
+    rotationAngle !== 0 ? rotatePoint(point, center, rotationAngle) : point;
+
+  let normalizedX =
+    ((rotated.x - bounds.minX) / (bounds.maxX - bounds.minX)) * width;
+  let normalizedY =
+    ((rotated.y - bounds.minY) / (bounds.maxY - bounds.minY)) * height;
+
+  // Espejar en Y si se pide
+  if (mirrorY) {
+    normalizedY = height - normalizedY;
+  }
+
+  return { normalizedX, normalizedY };
 }
 
 function generateTrackPath(
@@ -77,18 +104,23 @@ const createCircuito = async (circuitName: string) => {
   const old_session_key = sesionVieja ? sesionVieja.session_key : null;
   // Obtener localizaciones de un corredor
   const localizacionesUnicas = await getLocalizacionesCorredor(old_session_key);
-  const width = 1000;
-  const height = 2400;
-  const padding = 0;
-  const zoomFactor = 0.5;
 
   const bounds = getBounds(localizacionesUnicas);
+
+    // DATOS HARDCODEADOS DEL CIRCUITO
+  const width = 3000;
+  const height = 2400;
+  const zoomFactor = 0.5;
+  const rotationAngle = -58;
+  const mirrorY = true;
+
+
   const normalizedTrack = localizacionesUnicas.map((loc) =>
-    normalizePoint(loc, bounds, width, height, padding)
+    normalizePoint(loc, bounds, width, height, rotationAngle, mirrorY)
   );
   const trackPath = generateTrackPath(normalizedTrack);
 
-  const viewBox = `${bounds.minX * 0.5} ${bounds.minY * 0.05} ${
+  const viewBox = `${bounds.minX * 0.15} ${0} ${
     (bounds.maxX - bounds.minX) * zoomFactor
   } ${(bounds.maxY - bounds.minY) * zoomFactor}`;
 
@@ -99,7 +131,9 @@ const createCircuito = async (circuitName: string) => {
       bounds: bounds,
       width: width,
       height: height,
-      localizacionesUnicas: localizacionesUnicas
+      localizacionesUnicas: localizacionesUnicas,
+      rotationAngle: rotationAngle,
+      mirrorY: mirrorY,
     },
   };
   return {
@@ -107,9 +141,7 @@ const createCircuito = async (circuitName: string) => {
   };
 };
 
-const getCircuito = async (
-  circuitName: string
-): Promise<{ track: Track}> => {
+const getCircuito = async (circuitName: string): Promise<{ track: Track }> => {
   var circuito = getCircuitoPrecargado(circuitName);
 
   if (!circuito) {
