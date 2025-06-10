@@ -318,6 +318,7 @@ export default function Home() {
           <svg
             viewBox={trackData.viewBox}
             className="w-full h-auto border-none p-3"
+            aria-label="Mapa de circuito de Fórmula 1 en tiempo real"
           >
             {/* Pista principal */}
             <path
@@ -374,9 +375,13 @@ export default function Home() {
             ))}
           </svg>
         ) : (
-          <h1> Cargando circuito...</h1>
+          <h1 className="text-center text-gray-200 mb-4" >Mapa de Fórmula 1</h1>
         )}
       </div>
+      <h1 className="sr-only">Mapa de Fórmula 1 en Tiempo Real</h1>
+      <p className="text-center text-gray-200 mb-4 sr-only">
+      Mapa gratuito y en tiempo real de Fórmula 1. Puedes incrustarlo en tu web con un simple iframe.
+      </p>
     </div>
   );
 }

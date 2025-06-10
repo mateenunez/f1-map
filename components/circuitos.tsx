@@ -114,7 +114,6 @@ const getCircuito = async (
 
   if (!circuito) {
     const { track } = await createCircuito(circuitName);
-    console.log(track)
     return { track };
   }
 
