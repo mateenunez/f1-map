@@ -61,7 +61,7 @@ function generateTrackPath(
 ) {
   if (normalizedPoints.length === 0) return "";
   let path = `M ${normalizedPoints[0].normalizedX} ${normalizedPoints[0].normalizedY}`;
-  for (let i = 1; i < normalizedPoints.length; i++) {
+  for (let i = 1; i < 550; i++) {
     const p = normalizedPoints[i];
     path += ` L ${p.normalizedX} ${p.normalizedY}`;
   }
@@ -89,9 +89,9 @@ function filtrarLocalizacionesUnicas(data: any[]) {
   });
 }
 
-async function getLocalizacionesCorredor(old_session_key: string) {
+async function getLocalizacionesCorredor(old_session_key: string, old_session_date_start: Date) {
   const res = await fetch(
-    `https://api.openf1.org/v1/location?session_key=${old_session_key}&driver_number=1`
+    `https://api.openf1.org/v1/location?session_key=${old_session_key}&driver_number=1&date<=${new Date(new Date(old_session_date_start).getTime() + 0.5 * 60000).toISOString()}`
   );
   const data = await res.json();
   const localizacionesUnicas = filtrarLocalizacionesUnicas(data);
@@ -102,15 +102,16 @@ const createCircuito = async (circuitName: string) => {
   // Obtener sesión vieja
   const sesionVieja = await getSesionVieja(circuitName);
   const old_session_key = sesionVieja ? sesionVieja.session_key : null;
+  const old_session_date_start = sesionVieja ? sesionVieja.date_start : null;
   // Obtener localizaciones de un corredor
-  const localizacionesUnicas = await getLocalizacionesCorredor(old_session_key);
+  const localizacionesUnicas = await getLocalizacionesCorredor(old_session_key, old_session_date_start);
 
   const bounds = getBounds(localizacionesUnicas);
 
     // DATOS HARDCODEADOS DEL CIRCUITO
   const width = 3000;
   const height = 2400;
-  const zoomFactor = 0.5;
+  const zoomFactor = 0.45;
   const rotationAngle = -58;
   const mirrorY = true;
 
@@ -120,7 +121,7 @@ const createCircuito = async (circuitName: string) => {
   );
   const trackPath = generateTrackPath(normalizedTrack);
 
-  const viewBox = `${bounds.minX * 0.15} ${0} ${
+  const viewBox = `${bounds.minX * 0.105} ${0} ${
     (bounds.maxX - bounds.minX) * zoomFactor
   } ${(bounds.maxY - bounds.minY) * zoomFactor}`;
 

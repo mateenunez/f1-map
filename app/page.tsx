@@ -337,7 +337,7 @@ export default function Home() {
               stroke="white"
               opacity={0.35}
               fill="none"
-              strokeWidth="30"
+              strokeWidth="20"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
