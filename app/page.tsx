@@ -123,7 +123,6 @@ export default function Home() {
         new Date().getTime() - 10 * 1000
       ).toISOString()}`;
       const res = await fetch(url);
-      console.log(url)
       var data = await res.json();
 
       if (data.length > 0 && trackData) {
@@ -157,9 +156,9 @@ export default function Home() {
           return [];
         });
 
+        setLocations(uniquePositions.reverse());
         setAuxLocations(auxLocationList);
 
-        setLocations(uniquePositions.reverse());
       }
     }
   }
@@ -394,7 +393,8 @@ export default function Home() {
                       y={y - 15}
                       textAnchor="middle"
                       fontSize="30"
-                      fill="#fff"
+                      fontWeight={700}
+                      fill={`#${item.driver?.team_colour}`}
                       style={{ pointerEvents: "none" }}
                     >
                       {item.driver?.name_acronym}
