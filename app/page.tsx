@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
-import { getCircuito } from "@/components/circuitos";
+import { getCircuito, normalizePoint } from "@/components/circuitos";
 import {
   Driver,
   DriverPosition,
@@ -74,6 +74,23 @@ export default function Home() {
     return auxLocations;
   }
 
+  const normalizeToPositionData = (loc: PositionData, trackData: Track) => {
+  const { normalizedX, normalizedY } = normalizePoint(
+    loc,
+    trackData.bounds,
+    trackData.width,
+    trackData.height,
+    trackData.rotationAngle,
+    trackData.mirrorY
+  );
+  // Devuelve un objeto PositionData con los datos originales + los normalizados
+  return {
+    ...loc,
+    x: normalizedX,
+    y: normalizedY,
+  };
+};
+
   async function fetchSession() {
     const sessionResponse = await fetch(
       "https://api.openf1.org/v1/sessions?session_key=latest"
@@ -91,7 +108,7 @@ export default function Home() {
   async function fetchDrivers() {
     if (session) {
       var newDrivers = await fetch(
-        `https://api.openf1.org/v1/drivers?session_key=latest`
+        `https://api.openf1.org/v1/drivers?session_key=${session.session_key}`
       );
       var driversData = await newDrivers.json();
       if (driversData && Array.isArray(driversData)) {
@@ -102,13 +119,14 @@ export default function Home() {
 
   async function fetchCords(n: number = 20) {
     if (session) {
-      const url = `https://api.openf1.org/v1/location?session_key=latest&date>=${new Date(
+      const url = `https://api.openf1.org/v1/location?session_key=${session.session_key}&date>=${new Date(
         new Date().getTime() - 10 * 1000
       ).toISOString()}`;
       const res = await fetch(url);
+      console.log(url)
       var data = await res.json();
 
-      if (data.length > 0) {
+      if (data.length > 0 && trackData) {
         const uniquePositions = new Array();
         const seen = new Set<number>();
 
@@ -128,10 +146,11 @@ export default function Home() {
             (l) => l.driver_number === driver.driver_number
           );
           if (currentLocation && nextLocation) {
+            // Normalizamos los puntos current y next ya que no estan normalizados, y localizacionesUnicas si lo esta.
             return createAuxLocations(
               n,
-              currentLocation,
-              nextLocation,
+              normalizeToPositionData(currentLocation, trackData),
+              normalizeToPositionData(nextLocation, trackData),
               localizacionesUnicas
             );
           }
