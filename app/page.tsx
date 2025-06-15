@@ -120,8 +120,9 @@ export default function Home() {
   async function fetchCords(n: number = 20) {
     if (session) {
       const url = `https://api.openf1.org/v1/location?session_key=${session.session_key}&date>=${new Date(
-        new Date().getTime() - 10 * 1000
+        new Date().getTime() - 1* 60 * 1000
       ).toISOString()}`;
+      console.log(url);
       const res = await fetch(url);
       var data = await res.json();
 
@@ -156,6 +157,7 @@ export default function Home() {
           return [];
         });
 
+        
         setLocations(uniquePositions.reverse());
         setAuxLocations(auxLocationList);
 
@@ -324,11 +326,11 @@ export default function Home() {
         }
 
         // Filtra solo los valores definidos (por ahora solo Verstappen)
-        const filteredAuxLocations = nextAuxLocations.filter(Boolean);
+        //const filteredAuxLocations = nextAuxLocations.filter(x => x !== undefined && x !== null);
 
         // Normaliza las posiciones auxiliares actuales
         const normalizedDrivers = getLocalizaciones({
-          locations: filteredAuxLocations,
+          locations: nextAuxLocations,
           drivers,
           trackData,
         });
@@ -338,7 +340,7 @@ export default function Home() {
 
       return () => clearInterval(interval);
     }
-  }, [auxLocations]);
+  }, []);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-800">
@@ -361,7 +363,7 @@ export default function Home() {
             />
 
             {/* Renderizar corredores usando las posiciones animadas */}
-            {normalizedDrivers.map((item) => (
+            {normalizedDrivers.map((item, idx) => item ? 
               <Motion
                 key={item.driver?.driver_number || 0 + auxIndexRef.current}
                 defaultStyle={{
@@ -402,7 +404,7 @@ export default function Home() {
                   </g>
                 )}
               </Motion>
-            ))}
+            : null)}
           </svg>
         ) : (
           <h1
