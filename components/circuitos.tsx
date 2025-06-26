@@ -59,11 +59,14 @@ export function normalizePoint(
 function generateTrackPath(
   normalizedPoints: { normalizedX: number; normalizedY: number }[]
 ) {
-  if (normalizedPoints.length === 0) return "";
+  if (!normalizedPoints || normalizedPoints.length === 0) return "";
+
   let path = `M ${normalizedPoints[0].normalizedX} ${normalizedPoints[0].normalizedY}`;
-  for (let i = 1; i < 550; i++) {
+  for (let i = 1; i < normalizedPoints.length; i++) {
     const p = normalizedPoints[i];
-    path += ` L ${p.normalizedX} ${p.normalizedY}`;
+    if (p && p.normalizedX != null && p.normalizedY != null) {
+      path += ` L ${p.normalizedX} ${p.normalizedY}`;
+    }
   }
   return path;
 }
@@ -108,11 +111,11 @@ const createCircuito = async (circuitName: string) => {
 
   const bounds = getBounds(localizacionesUnicas);
 
-    // DATOS HARDCODEADOS DEL CIRCUITO
-  const width = 3000;
-  const height = 2400;
-  const zoomFactor = 0.45;
-  const rotationAngle = -58;
+  // DATOS HARDCODEADOS DEL CIRCUITO
+  const width = 500;
+  const height = 1000;
+  const zoomFactor = 0.9;
+  const rotationAngle = -100;
   const mirrorY = true;
 
 

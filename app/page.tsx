@@ -74,23 +74,6 @@ export default function Home() {
     return auxLocations;
   }
 
-  const normalizeToPositionData = (loc: PositionData, trackData: Track) => {
-  const { normalizedX, normalizedY } = normalizePoint(
-    loc,
-    trackData.bounds,
-    trackData.width,
-    trackData.height,
-    trackData.rotationAngle,
-    trackData.mirrorY
-  );
-  // Devuelve un objeto PositionData con los datos originales + los normalizados
-  return {
-    ...loc,
-    x: normalizedX,
-    y: normalizedY,
-  };
-};
-
   async function fetchSession() {
     const sessionResponse = await fetch(
       "https://api.openf1.org/v1/sessions?session_key=latest"
@@ -119,10 +102,9 @@ export default function Home() {
 
   async function fetchCords(n: number = 20) {
     if (session) {
-      const url = `https://api.openf1.org/v1/location?session_key=${session.session_key}&date>=${new Date(
-        new Date().getTime() - 1* 60 * 1000
-      ).toISOString()}`;
-      console.log(url);
+      const url = `https://api.openf1.org/v1/location?session_key=${
+        session.session_key
+      }&date>=${new Date(new Date().getTime() - 1 * 60 * 1000).toISOString()}`;
       const res = await fetch(url);
       var data = await res.json();
 
@@ -138,29 +120,7 @@ export default function Home() {
           }
         }
 
-        const auxLocationList: PositionData[][] = drivers.map((driver) => {
-          const nextLocation = uniquePositions.find(
-            (l) => l.driver_number === driver.driver_number
-          );
-          const currentLocation = locations.findLast(
-            (l) => l.driver_number === driver.driver_number
-          );
-          if (currentLocation && nextLocation) {
-            // Normalizamos los puntos current y next ya que no estan normalizados, y localizacionesUnicas si lo esta.
-            return createAuxLocations(
-              n,
-              normalizeToPositionData(currentLocation, trackData),
-              normalizeToPositionData(nextLocation, trackData),
-              localizacionesUnicas
-            );
-          }
-          return [];
-        });
-
-        
         setLocations(uniquePositions.reverse());
-        setAuxLocations(auxLocationList);
-
       }
     }
   }
@@ -171,16 +131,16 @@ export default function Home() {
         setIsEmpty(false);
 
         mockIndexRef.current =
-          (mockIndexRef.current + 50) % localizacionesUnicas.length;
+          (mockIndexRef.current + 30) % localizacionesUnicas.length;
 
         const mockData: PositionData[] = new Array();
 
-        // Todos los corredores 
+        // Todos los corredores
         // for (let index = 0; index < drivers.length; index++) {
         //   mockData.push({
         //   driver_number: drivers[index].driver_number,
-        //   x: localizacionesUnicas[mockIndexRef.current - 30 + index].x,
-        //   y: localizacionesUnicas[mockIndexRef.current - 30 + index].y,
+        //   x: localizacionesUnicas[mockIndexRef.current + index - 40].x,
+        //   y: localizacionesUnicas[mockIndexRef.current + index - 40].y,
         // });
         // }
 
@@ -264,7 +224,11 @@ export default function Home() {
         locations,
         drivers,
         trackData,
-      });
+      }).filter(
+        (item): item is NormalizedDrivers =>
+          typeof item?.normalizedX === "number" &&
+          typeof item?.normalizedY === "number"
+      );
       setNormalizedDrivers(normalizedDrivers);
     }
   }, [locations]);
@@ -281,7 +245,9 @@ export default function Home() {
     if (session && drivers && trackData) {
       const generalFetch = async () => {
         await fetchCords();
-        //fetchMockCords(); // Eliminar en producción
+        if (new Date(session.date_start)>new Date() || new Date(session.date_end)<new Date()){
+        fetchMockCords(); 
+        }
       };
       generalFetch();
       const interval = setInterval(generalFetch, 10 * 1000);
@@ -333,14 +299,18 @@ export default function Home() {
           locations: nextAuxLocations,
           drivers,
           trackData,
-        });
+        }).filter(
+          (item): item is NormalizedDrivers =>
+            typeof item?.normalizedX === "number" &&
+            typeof item?.normalizedY === "number"
+        );
 
         setNormalizedDrivers(normalizedDrivers);
       }, 0.5 * 1000);
 
       return () => clearInterval(interval);
     }
-  }, []);
+  }, [auxLocations]);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-800">
@@ -363,48 +333,50 @@ export default function Home() {
             />
 
             {/* Renderizar corredores usando las posiciones animadas */}
-            {normalizedDrivers.map((item, idx) => item ? 
-              <Motion
-                key={item.driver?.driver_number || 0 + auxIndexRef.current}
-                defaultStyle={{
-                  x: item.normalizedX,
-                  y: item.normalizedY,
-                }}
-                style={{
-                  x: spring(item.normalizedX, { stiffness: 30, damping: 10 }),
-                  y: spring(item.normalizedY, { stiffness: 30, damping: 10 }),
-                }}
-              >
-                {({ x, y }) => (
-                  <g className="transition-all duration-300 eas-in-out" >
-                    {/* Glow effect */}
-                    <circle cx={x} cy={y} r="20" fill="url(#carGlow)" />
-                    {/* Coche */}
-                    <circle
-                      cx={x}
-                      cy={y}
-                      r="20"
-                      fill={`#${item.driver?.team_colour || "3B82F6"}`}
-                      stroke="#FFFFFF"
-                      strokeWidth="2"
-                      className="drop-shadow-lg"
-                    />
-                    {/* Nombre o acrónimo */}
-                    <text
-                      x={x}
-                      y={y - 15}
-                      textAnchor="middle"
-                      fontSize="30"
-                      fontWeight={700}
-                      fill={`#${item.driver?.team_colour}`}
-                      style={{ pointerEvents: "none" }}
-                    >
-                      {item.driver?.name_acronym}
-                    </text>
-                  </g>
-                )}
-              </Motion>
-            : null)}
+            {normalizedDrivers.map((item, idx) =>
+              item ? (
+                <Motion
+                  key={item.driver?.driver_number || 0 + auxIndexRef.current}
+                  defaultStyle={{
+                    x: item.normalizedX,
+                    y: item.normalizedY,
+                  }}
+                  style={{
+                    x: spring(item.normalizedX, { stiffness: 30, damping: 10 }),
+                    y: spring(item.normalizedY, { stiffness: 30, damping: 10 }),
+                  }}
+                >
+                  {({ x, y }) => (
+                    <g className="transition-all duration-300 eas-in-out">
+                      {/* Glow effect */}
+                      <circle cx={x} cy={y} r="20" fill="url(#carGlow)" />
+                      {/* Coche */}
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r="20"
+                        fill={`#${item.driver?.team_colour || "3B82F6"}`}
+                        stroke="#FFFFFF"
+                        strokeWidth="2"
+                        className="drop-shadow-lg"
+                      />
+                      {/* Nombre o acrónimo */}
+                      <text
+                        x={x}
+                        y={y - 15}
+                        textAnchor="middle"
+                        fontSize="30"
+                        fontWeight={700}
+                        fill={`#${item.driver?.team_colour}`}
+                        style={{ pointerEvents: "none" }}
+                      >
+                        {item.driver?.name_acronym}
+                      </text>
+                    </g>
+                  )}
+                </Motion>
+              ) : null
+            )}
           </svg>
         ) : (
           <h1

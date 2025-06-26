@@ -7,21 +7,26 @@ export function getLocalizaciones({
   locations,
   drivers,
   trackData,
-}: Localizacion): NormalizedDrivers[] {
+}: Localizacion) {
   const driversMap = new Map(drivers.map((d) => [d.driver_number, d]));
 
   return locations.map((location) => {
-    const normalizedLocation = normalizePoint(
-      location,
-      trackData.bounds,
-      trackData.width,
-      trackData.height,
-      trackData.rotationAngle,
-      trackData.mirrorY
-    );
+    var normalizedLocation;
+    var driver;
+    if (location !== undefined) {
+      normalizedLocation = normalizePoint(
+        location,
+        trackData.bounds,
+        trackData.width,
+        trackData.height,
+        trackData.rotationAngle,
+        trackData.mirrorY
+      );
+      driver = driversMap.get(location.driver_number);
+    }
     return {
       ...normalizedLocation,
-      driver: driversMap.get(location.driver_number),
+      driver: driver,
     };
   });
 }
