@@ -114,7 +114,7 @@ const createCircuito = async (circuitName: string) => {
    // DATOS HARDCODEADOS DEL CIRCUITOAdd commentMore actions
   const width = 2400;
   const height = 3000;
-  const zoomFactor = 0.88;
+  const zoomFactor = 0.5;
   const rotationAngle = -58;
   const mirrorY = true;
 
@@ -150,6 +150,7 @@ const getCircuito = async (circuitName: string): Promise<{ track: Track }> => {
 
   if (!circuito) {
     const { track } = await createCircuito(circuitName);
+    console.log(track)
     return { track };
   }
 
